@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun updateLocationOnMap(latitude: Double, longitude: Double) {
         val location = LatLng(latitude, longitude)
         googleMap.clear()
-        googleMap.addMarker(MarkerOptions().position(location).title("Current Location"))
+        googleMap.addMarker(MarkerOptions().position(location).title("Localização Atual"))
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
 
         locationTextView.text = "Latitude: $latitude, Longitude: $longitude"
