@@ -1,33 +1,34 @@
 package com.example.myapplication
 
-import android.Manifest
-import android.content.pm.PackageManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Button
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
-    private lateinit var mMap: GoogleMap
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var mapView: MapView
+    private lateinit var googleMap: GoogleMap
+    private lateinit var locationTextView: TextView
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            getCurrentLocation()
-        } else {
-            Toast.makeText(this, "Permissão negada", Toast.LENGTH_SHORT).show()
+    private val locationReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val latitude = intent?.getDoubleExtra("latitude", 0.0)
+            val longitude = intent?.getDoubleExtra("longitude", 0.0)
+            if (latitude != null && longitude != null) {
+                updateLocationOnMap(latitude, longitude)
+            }
         }
     }
 
@@ -35,47 +36,58 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val mapFragment = supportFragmentManager
-            .findFragmentById(R.id.map) as SupportMapFragment
-        mapFragment.getMapAsync(this)
+        mapView = findViewById(R.id.map)
+        locationTextView = findViewById(R.id.locationTextView)
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        mapView.onCreate(savedInstanceState)
+        mapView.getMapAsync(this)
 
-        checkLocationPermission()
-    }
+        val startServiceButton: Button = findViewById(R.id.startServiceButton)
+        val stopServiceButton: Button = findViewById(R.id.stopServiceButton)
 
-    private fun checkLocationPermission() {
-        when {
-            ActivityCompat.checkSelfPermission(
-                this, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                getCurrentLocation()
-            }
-            else -> {
-                requestPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            }
+        startServiceButton.setOnClickListener {
+            val intent = Intent(this, LocationService::class.java)
+            startService(intent)
+        }
+
+        stopServiceButton.setOnClickListener {
+            val intent = Intent(this, LocationService::class.java)
+            stopService(intent)
         }
     }
 
-    private fun getCurrentLocation() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null) {
-                val currentLatLng = LatLng(location.latitude, location.longitude)
-                mMap.addMarker(MarkerOptions().position(currentLatLng).title("Você está aqui"))
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 15f))
-            } else {
-                Toast.makeText(this, "Localização não disponível", Toast.LENGTH_SHORT).show()
-            }
-        }
+    override fun onMapReady(map: GoogleMap) {
+        googleMap = map
     }
 
-    override fun onMapReady(googleMap: GoogleMap) {
-        mMap = googleMap
+    private fun updateLocationOnMap(latitude: Double, longitude: Double) {
+        val location = LatLng(latitude, longitude)
+        googleMap.clear()
+        googleMap.addMarker(MarkerOptions().position(location).title("Current Location"))
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f))
+
+        locationTextView.text = "Latitude: $latitude, Longitude: $longitude"
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+        LocalBroadcastManager.getInstance(this).registerReceiver(locationReceiver, IntentFilter("LocationUpdate"))
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView.onPause()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(locationReceiver)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mapView.onDestroy()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView.onLowMemory()
     }
 }
